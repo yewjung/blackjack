@@ -20,7 +20,7 @@ type Player struct {
 	ID       string
 	Conn     *websocket.Conn
 	RoomId   string
-	GameData interface{}
+	GameData GameData
 }
 
 type Request struct {
@@ -108,6 +108,7 @@ func sendPlayerAddingResponse(player *Player, conn *websocket.Conn) bool {
 }
 
 /*
+Creates a player and add him into memory
 Returns nil if player wasn't created
 */
 func createPlayer(conn *websocket.Conn) *Player {
