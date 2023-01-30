@@ -288,11 +288,3 @@ func startBlackjackGame(player *Player) {
 
 	player.Conn.WriteJSON("game in progress")
 }
-
-func drawCard() {
-	panic("unimplemented")
-}
-
-func getHandValue(dealerCards []int) {
-	panic("unimplemented")
-}
