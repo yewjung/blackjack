@@ -1,7 +1,9 @@
 package main
 
 import (
+	"math/rand"
 	"sync"
+	"time"
 )
 
 type Suit int
@@ -25,6 +27,7 @@ type GameResponse struct {
 	Event        GameEvent `json:"event"`
 	AffectedUser string    `json:"affectedUser"`
 	NewCard      *Card     `json:"card,omitempty"`
+	NextPlayer   string    `json:"nextPlayer"`
 }
 
 type Card struct {
@@ -81,7 +84,7 @@ func (game *Game) DrawCard(player *Player) {
 
 	gameData.Hand = append(gameData.Hand, card)
 
-	game.broadcast(HIT, &card)
+	game.broadcast(PLAYER_HIT, &card)
 }
 
 func (game *Game) isPlayersTurn(player *Player) bool {
@@ -93,7 +96,7 @@ func (game *Game) Stand(player *Player) {
 		// it is not his turn
 		return
 	}
-	game.broadcast(STAND, nil)
+	game.broadcast(PLAYER_STAND, nil)
 	game.nextTurn()
 }
 
@@ -102,14 +105,45 @@ func (game *Game) nextTurn() {
 	if game.Turn == len(game.Players) {
 		// dealer's turn to draw
 		// broadcast to players that it is dealer's turn
+		game.endGame()
 		return
 	}
 
 	// broadcast to players about next player's turn
-
+	game.broadcastNextTurn()
 }
 
-func (game *Game) broadcast(event GameEvent, newCard *Card) {
+func (game *Game) broadcastNextTurn() {
+	nextPlayer := game.Players[game.Turn]
+	response := Response{
+		Event: YOUR_TURN,
+	}
+	wg := sync.WaitGroup{}
+	wg.Add(len(game.Players))
+	go func() {
+		nextPlayer.Conn.WriteJSON(response)
+		wg.Done()
+	}()
+	for _, player := range game.Players {
+		if player.ID == nextPlayer.ID {
+			continue
+		}
+		go func(player *Player) {
+			response := Response{
+				Event:      NEXT_PLAYER,
+				NextPlayer: nextPlayer.ID,
+			}
+			player.Conn.WriteJSON(response)
+			wg.Done()
+		}(player)
+	}
+}
+
+func (game *Game) endGame() {
+	game.calculateHands()
+}
+
+func (game *Game) broadcast(event Event, newCard *Card) {
 	wg := sync.WaitGroup{}
 	wg.Add(len(game.Players))
 
@@ -134,12 +168,12 @@ func (game *Game) broadcast(event GameEvent, newCard *Card) {
 	wg.Wait()
 }
 
-func getEventResponse(event GameEvent, isCurrentPlayer bool, affectedUserId string, newCard *Card) GameResponse {
+func getEventResponse(event Event, isCurrentPlayer bool, affectedUserId string, newCard *Card) Response {
 	card := newCard
 	if !isCurrentPlayer {
 		card = nil
 	}
-	return GameResponse{
+	return Response{
 		Event:        event,
 		AffectedUser: affectedUserId,
 		NewCard:      card,
@@ -183,37 +217,44 @@ func broadcastResultToPlayer(player *Player, result Result) {
 	switch result {
 	case WIN:
 		// broadcast win
+		response := Response{
+			Event: GAME_WIN,
+		}
+		player.Conn.WriteJSON(response)
 	case LOSE:
 		// broadcast lost
+		response := Response{
+			Event: GAME_LOST,
+		}
+		player.Conn.WriteJSON(response)
 	case DRAW:
 		// broadcast draw
+		response := Response{
+			Event: GAME_DRAW,
+		}
+		player.Conn.WriteJSON(response)
 	}
 }
 
 func (game *Game) StartGame() {
 	// prepare deck by shuffling
-
+	game.Deck = shuffle(game.Deck)
 	// send two cards to each player
 
 	// send two cards to dealer
 
-	// ==== LOOP THROUGH PLAYERS ====
-	// player either hit or stand
-	// player allowed to have max of 5 cards
-	// if stand or 5 cards reached, move to next player
+}
 
-	// ==== LOOP ENDS ====
-
-	// dealer either hit or stand
-
-	// once dealer is done, calculate values for each player
-	// compare hand value of each player to dealer
-
-	// GAME ENDS
-
+func shuffle[T any](list []T) []T {
+	rand.Seed(time.Now().UnixNano())
+	for i := len(list) - 1; i > 0; i-- {
+		j := rand.Intn(i + 1)
+		list[i], list[j] = list[j], list[i]
+	}
+	return list
 }
 
 // IDEA:
-// when player sends message, check if it his turn
+// when player sends message, check if it is his turn
 // if it is not his turn, ignore his message
 // only proceed the game when the right player sends a message

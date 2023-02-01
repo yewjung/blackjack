@@ -7,6 +7,9 @@ const (
 	LEAVE_ROOM
 	CREATE_ROOM
 	START_GAME
+
+	SEND_HIT
+	SEND_STAND
 )
 
 type Event int
@@ -17,6 +20,13 @@ const (
 	JOINED_ROOM
 	LEFT_ROOM
 	ERROR
+	GAME_WIN
+	GAME_LOST
+	GAME_DRAW
+	YOUR_TURN
+	NEXT_PLAYER
+	PLAYER_HIT
+	PLAYER_STAND
 )
 
 type Error int

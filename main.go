@@ -29,14 +29,22 @@ type Request struct {
 }
 
 type Response struct {
-	Event    Event  `json:"event"`
-	RoomId   string `json:"roomId,omitempty"`
-	Error    *Error `json:"error,omitempty"`
-	PlayerId string `json:"playerId,omitempty"`
+	Event        Event  `json:"event"`
+	RoomId       string `json:"roomId,omitempty"`
+	Error        *Error `json:"error,omitempty"`
+	PlayerId     string `json:"playerId,omitempty"`
+	NextPlayer   string `json:"nextPlayer,omitempty"`
+	AffectedUser string `json:"affectedUser,omitempty"`
+	NewCard      *Card  `json:"newCard,omitempty"`
+}
+
+type Room struct {
+	PlayerMap map[string]*Player
+	Game      Game
 }
 
 var players = make(map[string]*Player)
-var rooms = make(map[string]map[string]*Player)
+var rooms = make(map[string]Room)
 
 func main() {
 	fmt.Println("server start")
@@ -91,6 +99,12 @@ func handleWebsocket(w http.ResponseWriter, r *http.Request) {
 			leaveRoom(player)
 		case START_GAME:
 			startBlackjackGame(player)
+		case SEND_HIT:
+			room := rooms[player.RoomId]
+			room.Game.DrawCard(player)
+		case SEND_STAND:
+			room := rooms[player.RoomId]
+			room.Game.Stand(player)
 		}
 	}
 }
@@ -140,8 +154,11 @@ func createRoom(player *Player) {
 		_, exist = rooms[roomId]
 	}
 	// insert new room into rooms
-	newRoom := map[string]*Player{
+	playerMap := map[string]*Player{
 		player.ID: player,
+	}
+	newRoom := Room{
+		PlayerMap: playerMap,
 	}
 	rooms[roomId] = newRoom
 
@@ -202,10 +219,10 @@ func joinRoom(player *Player, roomIDUncast interface{}) {
 	// adding new player into the room
 	player.RoomId = roomId
 	room := rooms[roomId]
-	room[player.ID] = player
+	room.PlayerMap[player.ID] = player
 	rooms[roomId] = room
 
-	if len(rooms[roomId]) >= 2 {
+	if len(rooms[roomId].PlayerMap) >= 2 {
 		startGame(roomId)
 	}
 }
@@ -214,18 +231,18 @@ func leaveRoom(player *Player) {
 	roomId := player.RoomId
 	room, ok := rooms[roomId]
 	if ok {
-		delete(room, player.ID)
+		delete(room.PlayerMap, player.ID)
 	}
 	player.RoomId = ""
 
 	// delete room if it is empty
-	if len(room) == 0 {
+	if len(room.PlayerMap) == 0 {
 		delete(rooms, roomId)
 	}
 }
 
 func startGame(roomId string) {
-	players := rooms[roomId]
+	players := rooms[roomId].PlayerMap
 
 	for _, player := range players {
 		startBlackjackGame(player)
