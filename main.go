@@ -14,6 +14,15 @@ import (
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
+	CheckOrigin: func(r *http.Request) bool {
+		allowedOrigins := []string{"http://127.0.0.1:5173"}
+		for _, origin := range allowedOrigins {
+			if r.Header.Get("Origin") == origin {
+				return true
+			}
+		}
+		return false
+	},
 }
 
 type Player struct {
@@ -68,10 +77,17 @@ func handleRooms(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleWebsocket(w http.ResponseWriter, r *http.Request) {
-	conn, _ := upgrader.Upgrade(w, r, nil)
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		return
+	}
 	defer conn.Close()
 
 	player := createPlayer(conn)
+	defer func() {
+		delete(players, player.ID)
+		leaveRoom(player)
+	}()
 	// send appropriate response back to client
 	playerCreated := sendPlayerAddingResponse(player, conn)
 	if !playerCreated {
@@ -243,65 +259,15 @@ func leaveRoom(player *Player) {
 
 func startGame(roomId string) {
 	players := rooms[roomId].PlayerMap
-
+	game := Game{Deck: []Card{}, DealerHands: []Card{}, Players: []*Player{}}
 	for _, player := range players {
-		startBlackjackGame(player)
+		game.Players = append(game.Players, player)
 	}
+	game.StartGame()
 }
 
 func startBlackjackGame(player *Player) {
 	fmt.Println("Starting Blackjack game...")
-
-	// var playerCards []int
-	// var dealerCards []int
-
-	// // Initial deal
-	// playerCards = append(playerCards, drawCard())
-	// dealerCards = append(dealerCards, drawCard())
-	// playerCards = append(playerCards, drawCard())
-	// dealerCards = append(dealerCards, drawCard())
-
-	// // Send initial cards to player
-	// player.Conn.WriteJSON(playerCards)
-
-	// // Player's turn
-	// for {
-	// 	var message string
-	// 	player.Conn.ReadJSON(&message)
-
-	// 	if message == "hit" {
-	// 		playerCards = append(playerCards, drawCard())
-	// 		player.Conn.WriteJSON(playerCards)
-	// 	} else if message == "stand" {
-	// 		break
-	// 	}
-	// }
-
-	// // Dealer's turn
-	// for {
-	// 	if getHandValue(dealerCards) < 17 {
-	// 		dealerCards = append(dealerCards, drawCard())
-	// 	} else {
-	// 		break
-	// 	}
-	// }
-
-	// // Determine winner
-	// playerValue := getHandValue(playerCards)
-	// dealerValue := getHandValue(dealerCards)
-
-	// var result string
-	// if playerValue > 21 {
-	// 	result = "Player busts, dealer wins"
-	// } else if dealerValue > 21 {
-	// 	result = "Dealer busts, player wins"
-	// } else if dealerValue > playerValue {
-	// 	result = "Dealer wins"
-	// } else if playerValue > dealerValue {
-	// 	result = "Player wins"
-	// } else {
-	// 	result = "It's a tie"
-	// }
 
 	player.Conn.WriteJSON("game in progress")
 }
